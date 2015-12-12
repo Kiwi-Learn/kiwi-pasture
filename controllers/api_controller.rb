@@ -26,7 +26,20 @@ class KiwiPasture < Sinatra::Base
 
   api_get_info = lambda do
     content_type :json
-    get_course(params[:id]).to_json
+
+    # If Course ID record already in database redirect it
+    # searched_result = Search.where(:course_id => params[:id]).all
+    # if searched_result[0]
+    #   redirect "/api/v2/searched/#{searched_result[0].course_id}", 303
+    # end
+
+    # If Course ID does not in database scrape it!
+    scraped_results = scrape_course(params[:id])
+
+    # After scraped Insert to database
+    # search_result = new_search(req, results)
+    # status 201
+    scraped_results.to_json
   end
 
   api_post_search = lambda do
@@ -37,46 +50,43 @@ class KiwiPasture < Sinatra::Base
       halt 400
     end
 
-    # TODO:
     # Query Database to get searched results.
     # If result in Database redirect to the correct route
+    searched_result = Search.where(:keyword => req['keyword']).all
+    logger.info 'Querying keyword'
+    if searched_result[0]
+      redirect "/#{settings.api_ver}/searched/#{searched_result[0].course_id}", 303
+    end
 
-    # search = Search.find_by_keyword(req['keyword'])
-    # if search
-    #   # status 201
-    #   redirect "/api/v2/searched/#{search.id}", 303
-    # end
+    # If result not in Database call scrapper to make a search
+    logger.info 'Scraping from ShareCourse'
+    begin
+      results = scraper_search_course(req['keyword'])
+    rescue
+      halt 500, 'Lookup of ShareCourse failed'
+    end
 
-    # TODO:
-    # If result not in Database call API to make a search
-    # begin
-    #   results = search_course(req['keyword'])
-    # rescue
-    #   halt 500, 'Lookup of ShareCourse failed'
-    # end
+    # If Course ID record already in database do NOT save it again!
+    searched_result = Search.where(:course_id => results.id).all
+    logger.info 'Querying Course ID'
+    if searched_result[0]
+      redirect "/#{settings.api_ver}/searched/#{searched_result[0].course_id}", 303
+    end
 
-    # TODO:
-    # After called the API got the results Insert to Database
-    # if results.name
-    #   search = Search.new(
-    #     keyword: req['keyword'],
-    #     course_name: results.name,
-    #     course_id:results.id,
-    #     course_url:results.url,
-    #     course_date: results.date)
-    #
-    #   if search.save
-    #     status 201
-    #     redirect "/api/v2/searched/#{search.id}", 303
-    #   else
-    #     halt 500, 'Error saving tutorial request to the database'
-    #   end
-    # else
-    #   # if result return nil, redirect to not found
-    #   redirect '/api/v2/searched/notfound', 303
-    # end
-
-    # search_course(req['keyword']).to_json
+    # After called the scrapper got the results Insert to Database
+    logger.info 'Save to database...'
+    if results.name
+      search_result = new_search(req, results)
+      if search_result.save
+        status 201
+        redirect "/#{settings.api_ver}/searched/#{search_result.course_id}", 303
+      else
+        halt 500, 'Error saving searched result request to the database'
+      end
+    else
+      # if result return nil, redirect to not found
+      redirect "#{settings.api_ver}/searched/notfound", 303
+    end
   end
 
   api_get_notfound = lambda do
@@ -86,24 +96,24 @@ class KiwiPasture < Sinatra::Base
 
   api_get_searched = lambda do
     content_type :json
-    # TODO: Query searched results from Database
-    # begin
-    #   search = Search.find(params[:id])
-    #   keyword = search.keyword
-    # rescue
-    #   halt 400
-    # end
-    #
-    # { keyword: keyword,
-    #   course_id: search.course_id,
-    #   course_name: search.course_name,
-    #   course_url: search.course_url,
-    #   course_date: search.course_date
-    # }.to_json
+    # Query searched results from Database
+    begin
+      search = Search.where(:course_id => params[:id]).all
+      keyword = search[0].keyword
+    rescue
+      halt 400
+    end
+
+    { keyword: keyword,
+      course_id: search[0].course_id,
+      course_name: search[0].course_name,
+      course_url: search[0].course_url,
+      course_date: search[0].course_date
+    }.to_json
   end
 
   api_get_courselist = lambda do
-    get_course_list().to_json
+    scrape_course_list().to_json
   end
 
   capture_api_ver = lambda do |ver|
@@ -127,8 +137,8 @@ class KiwiPasture < Sinatra::Base
   get '/api/v2/info/:id.json', &api_get_info
 
   get '/api/v2/searched/notfound', &api_get_notfound
-  # get '/api/v2/searched/:id', &api_get_searched
-  # post '/api/v2/search', &api_post_search
+  get '/api/v2/searched/:id', &api_get_searched
+  post '/api/v2/search', &api_post_search
 
   get '/api/v2/courselist', &api_get_courselist
 
