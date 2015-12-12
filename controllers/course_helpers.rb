@@ -2,14 +2,14 @@ require 'json'
 require 'concurrent'
 
 module CourseHelpers
-  def get_course(id)
+  def scrape_course(id)
     Course.new(id, nil)
   rescue => e
     logger.info e
     halt 404
   end
 
-  def get_course_list()
+  def scrape_course_list()
     CourseList.new()
   rescue => e
     logger.info e
