@@ -1,5 +1,7 @@
 # kiwi-pasture
 
+![Codeship Status for Kiwi-Learn/kiwi-pasture](https://codeship.com/projects/9de41700-8334-0133-a616-464b28b2a6d9/status?branch=master)
+
 # API using example
 
 **GET /**
@@ -63,6 +65,17 @@ $ rackup
 Thin web server (v1.6.4 codename Gob Bluth)
 Maximum connections set to 1024
 Listening on localhost:9292, CTRL+C to stop
+```
+
+Create table by Rakefile
+```sh
+rake db:migrate
+```
+
+Configure heroku ENV
+
+```sh
+rake config config_env:heroku RACK_ENV=production
 ```
 
 Run testing
